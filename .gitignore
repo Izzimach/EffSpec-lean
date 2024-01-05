@@ -1,0 +1,7 @@
+/build
+/lake-packages/*
+/.lake
+
+*.hash
+
+*.olean
