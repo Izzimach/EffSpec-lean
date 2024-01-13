@@ -173,7 +173,7 @@ def handleEff (h : EffAlgebra e b) (f : a → b) : Eff e a → b
 | .Step c next => h c (fun o => handleEff h f (next o))
 
 -- spec containing pre/post conditions for a given effect
-structure effSpec (e : Effect) :Type where
+structure effSpec (e : Effect) : Type where
     pre : e.op → Prop
     post : (c : e.op) → e.result c → Prop
 
@@ -186,10 +186,15 @@ def propEff (e : Effect) (Q : effSpec e) : Eff e Prop → Prop
 def effToPureSpec (e : Effect) (Q : effSpec e) : Eff e a → PureSpec a :=
     fun m post => propEff e Q (Functor.map post m)
 
+-- handler mapping to an effSpec
+def effSpecHandler (e : Effect) (Q : effSpec e) := (c : e.op) → Q.pre c → PSigma (fun (o : e.result c) => Q.post c o)
+
 
 -- to build a PreR using a relation `Eff e a → PureSpec a` we need an `OrderedRelation`
 instance {e : Effect} {Q : effSpec e} : OrderedRelation (Eff e) PureSpec (effToPureSpec e Q) where
     weaken := fun rm w => ∀ post, w post → rm post
+    weakenRfl := fun A => by simp
+    weakenTrans := fun a b post => a post ∘ b post
     weakenPure := by intros a x post
                      unfold effToPureSpec Functor.map instFunctorEff mapEff propEff
                      unfold pure Applicative.toPure Monad.toApplicative instMonadPureSpec
@@ -227,29 +232,52 @@ def pureDEff (e : Effect) (Q : effSpec e) : (a : Type) → PureSpec a → Type :
     PreR (Eff e) PureSpec (effToPureSpec e Q)
 
 -- a handler for a Dijkstra monad built on `Eff`
-def DEhandler (e : Effect) (a : Type) : Type := (c : e.op) → (e.result c → a) → a
+def DEHandleOp (e : Effect) (Q : effSpec e) := (c : e.op) → Q.pre c → @PSigma (e.result c) (Q.post c)
 
--- run a handler for a Dijkstra monad built on `Eff`. Note that we need the spec to be of a certain form.
-def handleDEff {A B: Type} {e : Effect} {Q : effSpec e}
-               { mpost : A → Prop} {R : B → Prop}
-               (m : pureDEff e Q A (fun (post : A → Prop) => ∀ o, mpost o → post o))
-               (f : (x : A) → mpost x → PSigma P)
-               (h : EffAlgebra e B)
-               (hc : ∀ (inp : e.op) (k : e.result inp → B), (∀ (oup : e.result inp), Q.post inp oup → R (k oup)) → Q.pre inp → R (h inp k))
-               : PSigma R :=
+def handleDEEff2aux
+                {A B : Type}
+                {mpost : A → Prop}
+                {R : B → Prop}
+                (m : Eff e A)
+                (pf : @OrderedRelation.weaken (Eff e) PureSpec _ _ (effToPureSpec e Q) _ A (effToPureSpec e Q m) (fun (post : A → Prop) => ∀ o, mpost o → post o))
+                (f : (x : A) → mpost x → PSigma R)
+                (handleOp : DEHandleOp e Q)
+                : PSigma R :=
     match m with
-    | ⟨.Pure x, pf⟩ => _
-    | ⟨.Step c next, pf⟩ => _
+    | .Pure x => f x (pf mpost (by simp))
+    | .Step c next => by
+        let y' := pf mpost (by simp)
+        unfold effToPureSpec propEff Functor.map instFunctorEff mapEff at y'
+        simp at y'
+        let ⟨r, fp⟩ := handleOp c y'.left
+        exact handleDEEff2aux
+                (next r)
+                (by let pf' : @OrderedRelation.weaken (Eff e) PureSpec _ _ (fun {a} => effToPureSpec e Q) _ _ (effToPureSpec e Q (next r)) (effToPureSpec e Q (Eff.Step c next)) :=
+                                         by unfold OrderedRelation.weaken instOrderedRelationEffPureSpecInstMonadEffInstMonadPureSpecTypeEffToPureSpec
+                                            simp
+                                            intros post wpre
+                                            unfold effToPureSpec propEff Functor.map instFunctorEff mapEff at wpre
+                                            unfold effToPureSpec propEff Functor.map instFunctorEff mapEff
+                                            simp_all
+                                            cases h : (next r)
+                                            let hx := wpre.right r fp
+                                            rw [h] at hx
+                                            unfold propEff mapEff at hx
+                                            exact hx
+                                            let hx := wpre.right r fp
+                                            rw [h] at hx
+                                            unfold propEff mapEff at hx
+                                            simp at hx
+                                            simp_all
+                    apply OrderedRelation.weakenTrans pf' pf)
+            f handleOp
 
-/-def handleDEff {a b : Type} {e : Effect} {d : (a : Type) → PureSpec a → Type} [DMonad d]
-               {Q : a → Prop} {P : b → Prop}
-               (R : MonadRelation (Eff e) PureSpec)
-               (m : d a (fun (post : a → Prop) => ∀ o, Q o → post o))
-               (ea : (x : a) → Q x → PSigma P)
-               (hi : (e.op) → (e.result c → B) → B)
-               (hx : ∀ (inp : e.op) (k : e.result inp → PureSpec b), (∀ (oup : e.result inp), Qi inp oup → R (k oup)) → Pi inp → R (hi inp k))
-               : PSigma P :=
-    _
--/
+
+def handleDEEff2 {mpost : A → Prop} (m : pureDEff e Q A (fun (post : A → Prop) => ∀ o, mpost o → post o))
+                 (f : (x : A) → mpost x → PSigma R)
+                 (handleOp : DEHandleOp e Q)
+                 : PSigma R :=
+    match m with | ⟨c,pf⟩ => handleDEEff2aux c pf f handleOp
+
 
 end Effect

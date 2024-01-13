@@ -112,6 +112,8 @@ def MonadRelation (M W : Type → Type) [Monad M] [Monad W] : Type 1 := {a : Typ
 -- we need these properties
 class OrderedRelation (M W : Type → Type) [Monad M] [Monad W] (R : {a : Type} → M a → W a) where
     weaken : W a → W a → Prop
+    weakenRfl : (A : W a) → weaken A A
+    weakenTrans : weaken A B → weaken B C → weaken A C
     weakenPure : (x : a) → weaken (R (pure x)) (pure x)
     weakenBind : (m₁ : M a) → (m₂ : a → M b) → (w₁ : W a) → (w₂ : a → W b) → weaken (R m₁) w₁ → ((x : a) → weaken (R (m₂ x)) (w₂ x)) → weaken (R (m₁ >>= m₂)) (w₁ >>= w₂)
 
@@ -152,7 +154,6 @@ instance {M W : Type → Type} [Monad M] [Monad W] {R : MonadRelation M W} [Orde
         exact PreR.mk (m.m >>= fComp) (OrderedRelation.weakenBind m.m fComp w₁ w₂ m.rel (fun x => (f x).rel))
 
 
-#check Function.const
 
 instance {M W : Type → Type}
     [Monad M] [LawfulMonad M]
@@ -164,7 +165,6 @@ instance {M W : Type → Type}
                    unfold Eq.mpr
                    congr
                    rw [bind_pure_comp]; simp
-                   let h₀ : PreR M W (fun {a} => R) a w                    = PreR M W (fun {a} => R) a (w >>= pure)         := by simp
                    let h₁ : PreR M W (fun {a} => R) a w                    = PreR M W (fun {a} => R) a ((fun a => a) <$> w) := by simp
                    let h₂ : PreR M W (fun {a} => R) a ((fun a => a) <$> w) = PreR M W (fun {a} => R) a (w >>= pure)         := by simp
                    let h₄ : HEq ((h₁ : PreR M W (fun {a} => R) a w = PreR M W (fun {a} => R) a ((fun a => a) <$> w)) ▸ m) m := by apply cast_heq
@@ -180,10 +180,10 @@ instance {M W : Type → Type}
                    apply cast_heq
     bindAssoc := by intros a b c w₁ w₂ w₃ m f g
                     unfold bindD instDMonadTypePreR; simp
-                    rw [←heq_iff_eq]
+                    rw [←heq_iff_eq] -- need to switch from Eq to HEq due to `cast_heq`
                     apply HEq.symm
-                    apply HEq.trans (cast_heq _ _)
-                    congr!
+                    apply HEq.trans (cast_heq _ _) -- get rid of that nasty Eq.mpr
+                    congr!   -- congr, dammit
                     simp
 
 
