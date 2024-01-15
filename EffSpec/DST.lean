@@ -45,6 +45,9 @@ def stateObs (s : Type) {a : Type} : StateM s a → StateSpec s a :=
 
 instance {s : Type} : OrderedRelation (StateM s) (StateSpec s) (stateObs s) where
     weaken := fun r₁ r₂ => ∀ post s, r₂ post s → r₁ post s
+    weakenRfl := by simp
+    weakenTrans := by intros _x A B C f₁ f₂ post s
+                      exact f₁ post s ∘ f₂ post s
     weakenPure := by intros a x post s₁
                      unfold stateObs pure Applicative.toPure Monad.toApplicative instMonadStateSpec StateT.instMonadStateT
                      simp
@@ -91,7 +94,7 @@ def putDST (x : s) : DST s Unit (fun post _ => post ⟨(),x⟩) :=
 #check DMonad.retD "argh"
 #reduce (putDST 3) >>w DMonad.retD 4
 
-def prog := show DST Nat String _ from putDST 3 >>w DMonad.retD "argh"
+def prog := show DST Nat String _ from putDST 2 >>w DMonad.retD "argh"
 
 def runDST {s : Type} {w : StateSpec s a} (m : DST s a w) (post : a × s → Prop) (s₀ : s) : w post s₀ → PSigma post :=
     fun pre =>
@@ -101,9 +104,11 @@ def runDST {s : Type} {w : StateSpec s a} (m : DST s a w) (post : a × s → Pro
 
 #reduce runDST prog (fun s => s.2 < 5) 2 _
 
-macro "unfoldpre" : tactic => `(tactic | {unfold bind Monad.toBind instMonadStateSpec; simp; unfold bindStateSpec; simp; constructor; simp})
+macro "unfoldpre" : tactic => `(tactic | {unfold bind Monad.toBind instMonadStateSpec; simp; unfold bindStateSpec; simp; apply Nat.lt_add_of_pos_left; simp})
 
-def y := runDST prog (fun s => s.2 < 5) 3 (by unfoldpre)
+def y := runDST prog (fun ⟨_a,s⟩ => s < 5) 3 (by {unfold bind Monad.toBind instMonadStateSpec; simp; unfold bindStateSpec; simp; apply Nat.lt_add_of_pos_left; simp})
+
+def h : Nat.succ 2 < 4 := by simp
 
 #reduce y
 #check y

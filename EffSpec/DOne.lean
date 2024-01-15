@@ -34,6 +34,9 @@ def oneObs {a : Type} : OneEff a → PureSpec a
 
 instance : @OrderedRelation OneEff PureSpec _ _ oneObs where
     weaken := fun r₁ r₂ => ∀ post, r₂ post → r₁ post
+    weakenRfl := by simp
+    weakenTrans := by intros _x A B C f₁ f₂ post
+                      exact f₁ post ∘ f₂ post
     weakenPure := by unfold oneObs pure Applicative.toPure Monad.toApplicative instMonadOneEff instMonadPureSpec
                      simp
                      unfold retPureSpec
