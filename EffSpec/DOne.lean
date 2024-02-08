@@ -1,5 +1,5 @@
 --
--- The almost simplest possible dijkstra monad built using a simple stateless monad and an observation into PureSpec.
+-- The (almost) simplest possible dijkstra monad built using a simple stateless monad and an observation into PureSpec.
 -- Mostly for instructional purposes.
 --
 import Std
@@ -25,7 +25,7 @@ instance : Monad OneEff where
     pure := OneEff.One
     bind := bindOneEff
 
-
+@[aesop norm]
 theorem bindOneEffPure (m : OneEff a) (f : a → OneEff b) : m >>= f = f (m.1) := by rfl
 
 @[aesop norm unfold]
@@ -53,7 +53,7 @@ instance : @OrderedRelation OneEff PureSpec _ _ oneObs where
                      exact h
 
 
--- A simple dijkstra monad with a pure-only monad and PureSpec for the spec
+-- A simple dijkstra monad with a simple  monad (OneEff) and PureSpec for the spec
 def DOne : (a : Type) → PureSpec a → Type := PreR OneEff PureSpec oneObs
 
 -- just re-use ret/bind from PreR
@@ -62,13 +62,14 @@ instance : DMonad DOne where
     bindD := @DMonad.bindD PureSpec _ (PreR OneEff PureSpec oneObs) _
 
 
+-- a basic "program" in DOne
 open DMonad in
 def somestuff :=
     show DOne Nat _ from
         retD 9 >>w retD 6
 
 -- Alternate version where we bind the monads and THEN apply oneObs observation
--- We can manually write the desired specification but we also have to prove it manually
+-- We can manually write the desired specification but we also have to prove it manually. Maybe aesop will be helpful here
 def somestuff2 : DOne Nat (pure 8) :=
         let m : OneEff Nat := pure 9 >>= fun _=> pure 8
         PreR.mk m (by unfold pure Applicative.toPure Monad.toApplicative instMonadPureSpec OrderedRelation.weaken
