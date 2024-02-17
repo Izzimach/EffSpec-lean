@@ -83,18 +83,21 @@ instance : DMonad (DST s) where
     bindD := @DMonad.bindD (StateSpec s) _ (PreR (StateM s) (StateSpec s)  (stateObs s)) _
 
 def getDST : DST s s (fun post s₀ => post ⟨s₀,s₀⟩) :=
-    PreR.mk (fun s => ⟨s,s⟩) (by unfold OrderedRelation.weaken stateObs instOrderedRelationStateMStateSpecInstMonadStateTIdInstMonadIdInstMonadStateSpecTypeStateObs
-                                 simp)
+    PreR.mk
+        (fun s => ⟨s,s⟩)
+        (by unfold OrderedRelation.weaken stateObs instOrderedRelationStateMStateSpecInstMonadStateTIdInstMonadIdInstMonadStateSpecTypeStateObs
+            simp)
 
 def putDST (x : s) : DST s Unit (fun post _ => post ⟨(),x⟩) :=
-    PreR.mk (fun s => ⟨(),x⟩) (by unfold OrderedRelation.weaken stateObs instOrderedRelationStateMStateSpecInstMonadStateTIdInstMonadIdInstMonadStateSpecTypeStateObs
-                                  simp)
-
+    PreR.mk
+        (fun _s => ⟨(),x⟩)
+        (by unfold OrderedRelation.weaken stateObs instOrderedRelationStateMStateSpecInstMonadStateTIdInstMonadIdInstMonadStateSpecTypeStateObs
+            simp)
 
 #check DMonad.retD "argh"
 #reduce (putDST 3) >>w DMonad.retD 4
 
-def prog := show DST Nat String _ from putDST 2 >>w DMonad.retD "argh"
+def prog := show DST Nat String _ from putDST 4 >>w DMonad.retD "argh"
 
 def runDST {s : Type} {w : StateSpec s a} (m : DST s a w) (post : a × s → Prop) (s₀ : s) : w post s₀ → PSigma post :=
     fun pre =>
@@ -104,16 +107,25 @@ def runDST {s : Type} {w : StateSpec s a} (m : DST s a w) (post : a × s → Pro
 
 #reduce runDST prog (fun s => s.2 < 5) 2 _
 
-macro "unfoldpre" : tactic => `(tactic | {unfold bind Monad.toBind instMonadStateSpec; simp; unfold bindStateSpec; simp; apply Nat.lt_add_of_pos_left; simp})
+macro "autosolve" : tactic =>
+    `(tactic | aesop (add norm unfold bindStateSpec,
+                          norm unfold bind,
+                          norm unfold Monad.toBind,
+                          norm unfold instMonadStateSpec,
+                          safe apply Nat.succ_lt_succ,
+                          safe apply Nat.zero_lt_succ))
 
-def y := runDST prog (fun ⟨_a,s⟩ => s < 5) 3 (by {unfold bind Monad.toBind instMonadStateSpec; simp; unfold bindStateSpec; simp; apply Nat.lt_add_of_pos_left; simp})
 
-def h : Nat.succ 2 < 4 := by simp
+--set_option trace.aesop true
+
+def y := runDST prog (fun ⟨_a,s⟩ => s < 5) 3 (by autosolve)
+
+def h : 2 < 5 := by apply Nat.lt_add_of_pos_left; apply Nat.zero_lt_succ
 
 #reduce y
 #check y
 
-macro "goProg" prog:term "," post:term "," state:term : term => `(runDST $prog $post $state (by unfoldpre))
+macro "goProg" prog:term "," post:term "," state:term : term => `(runDST $prog $post $state (by autosolve))
 
 
 #check goProg prog, (fun (s : String × Nat) => s.2 < 5), 3
