@@ -149,19 +149,14 @@ instance {state : Type} : WeakenOpObs (StateEffObs state) where
                   simp
                   rename_i c next ih
                   simp_all
-                  cases c
-                  simp_all
-                  rename_i s'
-                  conv => {rhs; arg 1; unfold StateEffObs; {}}
-                  conv => {lhs; unfold StateEffObs joinEff mapEff}
-                  simp_all
-                  rfl
-                  simp_all
-                  conv => {rhs; arg 1; unfold StateEffObs; {}}
-                  conv => {lhs; unfold StateEffObs joinEff mapEff}
-                  simp_all
-                  rfl
-
+                  cases c <;> {
+                    simp_all
+                    try {rename_i s'}
+                    conv => {rhs; arg 1; unfold StateEffObs; {}}
+                    conv => {lhs; unfold StateEffObs joinEff mapEff}
+                    simp_all
+                    rfl
+                  }
 
 def prepostStateM (s a : Type) (pre : s → Prop) (post : a × s → Prop) : Type :=
     PSigma pre → PSigma post
@@ -260,15 +255,12 @@ instance {e : Effect} {Q : effGhostSpec e s} : OrderedRelation (Eff e) (GhostSpe
                      induction m₁ with
                      | Pure a =>
                         intros post state w1post
-                        simp_all
                         apply frel a post state
                         apply mrel (fun x => w₂ x.1 post x.snd)
                         exact w1post
                      | Step c next ih =>
                         intros post s₁ w1post
-                        simp_all
-                        unfold bindEff mapEff propEffGhost
-                        simp_all
+                        unfold propEffGhost joinEff mapEff
                         apply And.intro
                         let pz := mrel (fun x => w₂ x.1 post x.2) s₁ w1post
                         exact pz.1
@@ -280,11 +272,3 @@ instance {e : Effect} {Q : effGhostSpec e s} : OrderedRelation (Eff e) (GhostSpe
                         unfold propEffGhost mapEff at pz
                         simp at pz
                         {}
-
-
-
-
-
-def Dec3Nat := ∀ s₁ s₂, s₁ > 3 → s₂ = s₁ - 1
-
-def Dec3Pre := ∃ s, s > 3
